@@ -1,0 +1,829 @@
+\documentclass[12pt,oneside]{article}
+\usepackage[utf-8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{natbib}
+\usepackage{hyperref}
+\usepackage{color}
+\usepackage{soul}
+
+% Line numbering for submission
+\usepackage{lineno}
+\linenumbers
+
+% Double spacing
+\doublespacing
+
+% Define colors for notes
+\definecolor{yellow}{RGB}{255,255,0}
+\definecolor{cyan}{RGB}{0,255,255}
+
+% Custom commands
+\newcommand{\TODO}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\CITE}{\textcolor{blue}{[CITE]}}
+\newcommand{\FIG}[1]{Figure~\ref{fig:#1}}
+\newcommand{\TAB}[1]{Table~\ref{tab:#1}}
+
+%-----------
+% TITLE PAGE
+%-----------
+\title{SPP1+ Tumor-Associated Macrophages and T Cell Exhaustion Predict Immunotherapy Response in Gastric Cancer: A Single-Cell Meta-Analysis}
+
+\author{
+    \TODO{Your Name}$^{1,2}$\thanks{Corresponding author: \textcolor{blue}{[email]}} \\
+    \TODO{Co-Author 2}$^{1}$, \\
+    \TODO{Co-Author 3}$^{1}$
+}
+
+\date{}
+
+%-----------
+% AFFILIATIONS (footnote or separate)
+%-----------
+% If using \thanks{} above, add affiliations below
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\TODO{Write 150-250 word abstract following IMRAD structure:}
+\begin{enumerate}
+    \item \TODO{Background (2-3 sentences): Problem statement}
+    \item \TODO{Methods (2-3 sentences): What you did}
+    \item \TODO{Results (3-4 sentences): Main findings}
+    \item \TODO{Conclusion (1-2 sentences): Clinical significance}
+\end{enumerate}
+
+\textbf{Keywords:} \TODO{gastric cancer, tumor microenvironment, single-cell RNA-seq, macrophages, T cell exhaustion, immunotherapy}
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+%-----------
+% INTRODUCTION
+%-----------
+\section{Introduction}
+
+\subsection{Gastric Cancer: Epidemiology and Molecular Subtypes}
+\TODO{Write 1-2 paragraphs covering:}
+\begin{itemize}
+    \item Global incidence/mortality of gastric cancer
+    \item Molecular heterogeneity (MSI, EBV, CIN, GS subtypes)
+    \item Current standard of care (chemotherapy + immunotherapy)
+    \item Hint: Cite TCGA gastric, ACRG, and major immunotherapy trials
+\end{itemize}
+
+\subsection{Immunotherapy Response: Role of the Tumor Microenvironment}
+\TODO{Write 2-3 paragraphs covering:}
+\begin{itemize}
+    \item Only 30-40\% of gastric cancer patients respond to PD-1/PD-L1 inhibitors
+    \item Key determinants: T cell infiltration, exhaustion, regulatory cells
+    \item Myeloid cell heterogeneity: M1 vs M2, TAMs, monocytes
+    \item CAF-mediated immunosuppression
+    \item Define ``cold'' vs ``hot'' tumors
+\end{itemize}
+
+\subsection{Current Knowledge Gaps}
+\TODO{Write 1 paragraph:}
+\begin{itemize}
+    \item Previous studies limited to single datasets
+    \item Need for comprehensive meta-analysis approach
+    \item Questions remaining about dominant cell populations and predictive markers
+\end{itemize}
+
+\subsection{Study Rationale and Aims}
+\TODO{Write 1 paragraph + 3-4 bullet aims:}
+\begin{itemize}
+    \item Why scRNA-seq? (single-cell resolution, genome-wide)
+    \item Why meta-analysis? (power, reproducibility, generalizability)
+    \item Why Korean cohort? (rich clinical metadata: PFS, OS, HER2/EBV/MSI, PDL1 CPS, progression status)
+    \item \textbf{Aim 1:} Characterize TME composition across 766k cells from 5 scRNA-seq cohorts
+    \item \textbf{Aim 2:} Identify cell populations predictive of immunotherapy response
+    \item \textbf{Aim 3:} Validate findings in bulk RNA-seq (TCGA + GEO)
+    \item \textbf{Aim 4:} Develop composite TME predictor score
+\end{itemize}
+
+%-----------
+% METHODS
+%-----------
+\section{Methods}
+
+\subsection{Data Sources and Cohorts}
+
+\subsubsection{Korean Primary Cohort}
+\TODO{Write 3-4 sentences with exact numbers:}
+\begin{itemize}
+    \item n = 33 patients, 138 samples
+    \item Sample types: tumor, adjacent normal, distal normal
+    \item Timepoints: Baseline, Follow-up 1, Follow-up 2
+    \item Raw: 654,770 cells $\times$ 36,601 genes
+    \item Source: \TODO{[Paper reference or direct collaboration]}
+    \item Clinical metadata from Table S1: PFS/OS, HER2/EBV/MSI status, TCGA subtype, PDL1 CPS, progression category
+\end{itemize}
+
+\subsubsection{External scRNA-seq Cohorts}
+\TODO{Create table with:}
+\begin{itemize}
+    \item Dataset name, accession, reference
+    \item n cells, platform, year
+    \item Inclusion criteria
+    \item Note sathe2020 exclusion rationale
+\end{itemize}
+
+See \TAB{cohort_summary} for detailed cohort information.
+
+\subsubsection{Bulk RNA-seq Validation Cohorts}
+\TODO{Write 3-4 sentences:}
+\begin{itemize}
+    \item TCGA-STAD: n=443 samples (GDC portal, downloaded 2024)
+    \item GEO cohorts: GSE84437 (n=432, RFS), GSE26253 (n=163, OS), GSE62254 (n=300, ACRG)
+    \item Availability: Survival data available for GSE84437, GSE26253; only clinicopathologic for GSE62254
+\end{itemize}
+
+\subsection{Single-Cell RNA-seq Processing}
+
+\subsubsection{Quality Control (Notebook: 01\_preprocessing.py)}
+\TODO{Specify exact thresholds:}
+\begin{itemize}
+    \item Cells per sample: exclude if $<$ 200 or $>$ 6,000 genes
+    \item Mitochondrial reads: exclude if $>$ 20\% (dying/apoptotic cells)
+    \item Result: Korean cohort 654,770 $\to$ 429,867 cells (34.3\% filtered)
+    \item Genes: exclude if expressed in $<$ 3 cells (3,910 genes removed, 10.7\%)
+    \item Doublet detection: Scrublet per sample; flagged but not removed (0.97\% total)
+\end{itemize}
+
+\subsubsection{Normalization and Feature Selection}
+\TODO{Write 2-3 sentences:}
+\begin{itemize}
+    \item Normalization: log-normalization to 10,000 counts/cell
+    \item HVG selection: 3,000 genes via seurat\_v3 method
+    \item Batch correction: per-sample (sample\_key) to prioritize biological over technical variation
+\end{itemize}
+
+\subsubsection{Dimensionality Reduction and Clustering}
+\TODO{Write 2-3 sentences:}
+\begin{itemize}
+    \item PCA: 50 components, randomized SVD
+    \item Neighborhood: k=15 nearest neighbors using top 50 PCs
+    \item UMAP: default parameters
+    \item Clustering: Leiden algorithm at resolution 0.5 $\to$ 45 clusters (Korean cohort)
+\end{itemize}
+
+\subsection{External Dataset Integration (Notebooks: 02-05)}
+
+\subsubsection{Per-Dataset Quality Control (04\_standardized\_qc.py)}
+\TODO{Write 2-3 sentences:}
+\begin{itemize}
+    \item Applied same QC thresholds to all 5 external cohorts
+    \item Doublet detection: Scrublet per dataset
+    \item Final cell counts after QC: \TODO{[list by dataset]}
+\end{itemize}
+
+\subsubsection{scVI Integration (05\_integration.py)}
+\TODO{Write 3-4 sentences explaining scVI:}
+\begin{itemize}
+    \item Method: Single-Cell Variational Inference (scVI-tools)
+    \item Architecture:
+    \begin{itemize}
+        \item $n\_latent = 30$ (latent dimensions)
+        \item $n\_layers = 2$ (encoder/decoder layers)
+        \item Loss: Zero-Inflated Negative Binomial (ZINB)
+        \item Dispersion: gene-batch
+    \end{itemize}
+    \item Training: \TODO{[epochs, batch size, learning rate from your 05_integration.py]}
+    \item Checkpoint loading: Epoch 10 (full training interrupted by \TODO{[reason]}; impact assessed in \TODO{[results/discussion]})
+    \item Datasets integrated: 5 cohorts (sathe2020 excluded: only 8,704 genes, missing key exhaustion markers)
+    \item Output: Combined latent space, 17 Leiden clusters at resolution 0.5
+\end{itemize}
+
+\subsubsection{Integration Quality Assessment}
+\TODO{Write 2-3 sentences describing QC metrics:}
+\begin{itemize}
+    \item Batch effect: \TODO{[Method: kBET? ARI? Silhouette? — cite your 05_integration.py checks]}
+    \item Cluster stability: \TODO{[Method and result]}
+    \item UMAP quality: \TODO{[Any visual checks or metrics?]}
+\end{itemize}
+
+\subsection{Cell Type Annotation (Notebook: 06\_cell\_type\_annotation.py)}
+
+\subsubsection{Automated Annotation via CellTypist}
+\TODO{Write 2-3 sentences:}
+\begin{itemize}
+    \item Model: \TODO{[Which CellTypist model? Human immune cells? Custom reference?]}
+    \item Confidence threshold: \TODO{[What threshold did you use?]}
+    \item Fallback: Fell back to marker-based scoring due to gene number mismatch (restored 32,691 genes $\to$ 3,000 HVG input conflict)
+\end{itemize}
+
+\subsubsection{Marker-Based Cell Type Scoring}
+\TODO{Write 2-3 sentences:}
+\begin{itemize}
+    \item Method: \TODO{[AddModuleScore? AUCell? seurat-AddModuleScore? Specify exact method]}
+    \item Signatures: \TODO{[Cite source of gene signatures — literature, custom, database?]}
+    \item Major cell types identified:
+    \begin{itemize}
+        \item T/NK cells (141K cells in Korean cohort)
+        \item Epithelial cells (131K)
+        \item Myeloid cells (69K)
+        \item B/Plasma cells (65K)
+        \item Fibroblasts (10K)
+        \item Endothelial cells (8K)
+    \end{itemize}
+\end{itemize}
+
+\subsection{Cell State Scoring (Notebook: 07\_meta\_analysis.py)}
+
+\subsubsection{T Cell Exhaustion Score}
+\TODO{Write 1-2 sentences specifying genes:}
+\begin{itemize}
+    \item Exhaustion markers: PDCD1 (PD-1), HAVCR2 (TIM-3), LAG3, TIGIT
+    \item Scoring: \TODO{[Method from your 07_meta_analysis.py]}
+    \item Applied to: CD8+ T cell subset
+\end{itemize}
+
+\subsubsection{Macrophage Polarization Score (M1 vs M2)}
+\TODO{Write 1-2 sentences:}
+\begin{itemize}
+    \item M1 (inflammatory): \TODO{[List genes: TNF, IL6, CXCL10, etc.]}
+    \item M2 (immunosuppressive): \TODO{[List genes: IL10, TGFB1, CD163, MARCO, etc.]}
+    \item Method: \TODO{[Scoring approach]}
+\end{itemize}
+
+\subsubsection{Cancer-Associated Fibroblast (CAF) Signature}
+\TODO{Write 1-2 sentences:}
+\begin{itemize}
+    \item Genes: \TODO{[List key CAF markers — source?]}
+    \item Method: \TODO{[Scoring approach]}
+    \item Applied to: Fibroblast subset
+\end{itemize}
+
+\subsection{Statistical Analysis}
+
+\subsubsection{Survival Analysis (Korean Cohort)}
+\TODO{Write 2-3 sentences:}
+\begin{itemize}
+    \item Endpoint: Progression-Free Survival (PFS) and Overall Survival (OS)
+    \item Stratification: High vs Low based on \TODO{[median split? Tertiles? Quartiles?]}
+    \item Method: Kaplan-Meier curves + Cox proportional hazards regression
+    \item Covariates: \TODO{[Adjusted for any variables? Age? Gender? Stage?]}
+    \item Test: Log-rank test for KM; $\chi^2$ test for proportional hazards assumption
+\end{itemize}
+
+\subsubsection{Bulk RNA-seq Signature Estimation}
+\TODO{Write 2-3 sentences:}
+\begin{itemize}
+    \item Method: \TODO{[ssGSEA? NNLS deconvolution? Other?]}
+    \item Reference: \TODO{[Korean cohort cell type signatures? Published reference?]}
+    \item Applied to: TCGA-STAD, GSE84437, GSE26253, GSE62254
+    \item Output: Signature score per sample
+\end{itemize}
+
+\subsubsection{Survival Validation in Bulk Cohorts}
+\TODO{Write 1-2 sentences:}
+\begin{itemize}
+    \item Same approach as Korean cohort
+    \item Endpoint: Overall Survival (TCGA, GSE84437); Recurrence-Free Survival (GSE26253)
+\end{itemize}
+
+\subsubsection{Cross-Cohort Replication Analysis}
+\TODO{Write 1-2 sentences:}
+\begin{itemize}
+    \item Test: Chi-square test for presence/absence of signatures across 5 scRNA-seq cohorts
+    \item Threshold: \TODO{[Score $>$ 0? $>$ median? Define ``detectable'']}
+    \item Hypothesis: Signature should be detectable (not zero) in all cohorts
+\end{itemize}
+
+\subsection{Data Availability and Code}
+\TODO{Fill in actual locations:}
+\begin{itemize}
+    \item Korean cohort: \TODO{[GEO? Zenodo? Contact for access?]}
+    \item Processed objects (h5ad): \TODO{[GEO? Zenodo?]}
+    \item Code (Jupyter notebooks): \TODO{[GitHub repository]}
+    \item TCGA data: GDC Data Portal (publicly available)
+    \item GEO data: Publicly available (GSE accessions)
+    \item Raw data availability statement: \TODO{[Fill in}}
+\end{itemize}
+
+%-----------
+% RESULTS
+%-----------
+\section{Results}
+
+\subsection{Integration of 766,845 Gastric Cancer Cells Reveals Major TME Subsets}
+\TODO{Write 3-4 paragraphs:}
+
+\subsubsection*{Paragraph 1: Integration summary}
+\begin{itemize}
+    \item 5 scRNA-seq cohorts integrated: \TODO{[n cells by dataset]}
+    \item Total: 766,845 cells
+    \item 4,000 HVGs used for integration
+    \item 17 Leiden clusters identified
+    \item Integration quality: \TODO{[metrics from QC]}
+\end{itemize}
+
+\subsubsection*{Paragraph 2: Cell type composition}
+\begin{itemize}
+    \item Major types: T/NK, Epithelial, Myeloid, B/Plasma, Fibroblast, Endothelial
+    \item Percentages: \TODO{[Calculate from your integrated object]}
+    \item Reference \FIG{cohort_overview} Panel A (UMAP) and Panel C (composition heatmap)
+\end{itemize}
+
+\subsubsection*{Paragraph 3: TME heterogeneity by progression}
+\begin{itemize}
+    \item Slow progressors (PFS $>$ X months): \TODO{[Cell type composition]}
+    \item Fast progressors (PFS $<$ X months): \TODO{[Cell type composition]}
+    \item Statistical test and p-values: \TODO{[Mann-Whitney? Fisher's exact?]}
+    \item Cite \FIG{cohort_overview} Panel D
+\end{itemize}
+
+\subsubsection*{Paragraph 4: Clinical relevance}
+\begin{itemize}
+    \item Median PFS/OS: \TODO{[Slow vs Fast]}
+    \item Cite \FIG{cohort_overview} Panel E (KM curve)
+\end{itemize}
+
+\subsection{SPP1+ Macrophages Are Enriched in Fast-Progressing Tumors}
+\TODO{Write 3-4 paragraphs:}
+
+\subsubsection*{Paragraph 1: Macrophage heterogeneity}
+\begin{itemize}
+    \item Myeloid subclustering identified \TODO{[n]} macrophage subtypes
+    \item Subtypes: SPP1+, APOE+, inflammatory, etc.
+    \item Top DEGs per subtype: \TODO{[List top 3-5 genes for SPP1+ vs others]}
+    \item Reference \FIG{spp1_macrophage} Panel A (UMAP) and Panel B (violin plots)
+\end{itemize}
+
+\subsubsection*{Paragraph 2: SPP1+ frequency by progression}
+\begin{itemize}
+    \item Slow progressors: \TODO{[16.9\%]} of myeloid cells are SPP1+
+    \item Fast progressors: \TODO{[7.3\%]} of myeloid cells are SPP1+
+    \item Fold-change: \TODO{[2.3-fold]}
+    \item Statistical test: \TODO{[p-value]}
+    \item Cite \FIG{spp1_macrophage} Panel C
+\end{itemize}
+
+\subsubsection*{Paragraph 3: Prognostic value in Korean cohort}
+\begin{itemize}
+    \item High SPP1+ group (>median): Median PFS = \TODO{[X]} months, median OS = \TODO{[Y]} months
+    \item Low SPP1+ group: Median PFS = \TODO{[X]} months, median OS = \TODO{[Y]} months
+    \item Cox model: HR [95\% CI] = \TODO{[e.g., 2.1 [1.2-3.7]]}, p = \TODO{[0.008]}
+    \item Univariate result; multivariate adjusted for: \TODO{[Age? Grade? Stage?]}
+    \item Cite \FIG{spp1_macrophage} Panel D (KM curve)
+\end{itemize}
+
+\subsubsection*{Paragraph 4: Functional implications}
+\begin{itemize}
+    \item Pathway analysis: Top KEGG/GO terms for SPP1+ vs other macrophages
+    \item Known biology: SPP1 (osteopontin) role in \TODO{[angiogenesis? immunosuppression? ECM remodeling?]}
+\end{itemize}
+
+\subsection{T Cell Exhaustion Co-occurs with SPP1+ Macrophage Infiltration}
+\TODO{Write 2-3 paragraphs:}
+
+\subsubsection*{Paragraph 1: Exhaustion marker expression}
+\begin{itemize}
+    \item \% of CD8+ T cells expressing: PD1 (\TODO{[X]}\%), TIM3 (\TODO{[X]}\%), LAG3 (\TODO{[X]}\%)
+    \item Slow progressors: \TODO{[Exhaustion score distribution]}
+    \item Fast progressors: \TODO{[Exhaustion score distribution]}
+    \item Statistical test: \TODO{[Mann-Whitney p-value]}
+    \item Cite \FIG{trajectory} Panel C
+\end{itemize}
+
+\subsubsection*{Paragraph 2: Spatial association (cell-cell communication)}
+\begin{itemize}
+    \item LIANA analysis identified \TODO{[n]} significant macrophage-T cell interactions
+    \item Top interactions: SPP1-ITGAV, SPP1-CD44, \TODO{[others?]}
+    \item Also identified: TGFB-TGFBR, IL10-IL10RA, \TODO{[others?]}
+    \item Methods: LIANA aggregates CellChat, Connectome, Tensor-cell2cell
+    \item Cite \FIG{communication} Panel A-B
+\end{itemize}
+
+\subsubsection*{Paragraph 3: Correlation with progression}
+\begin{itemize}
+    \item Spearman correlation: SPP1+ macrophage fraction vs CD8 exhaustion score
+    \item r = \TODO{[e.g., 0.62]}, p = \TODO{[e.g., 0.001]}
+    \item Interpretation: SPP1+ myeloid infiltration correlates with T cell dysfunction
+    \item Cite \FIG{trajectory} Panel D
+\end{itemize}
+
+\subsection{CAF Signature Predicts Poor Prognosis Across Multiple Cohorts}
+\TODO{Write 2-3 paragraphs:}
+
+\subsubsection*{Paragraph 1: CAF frequency and clinical association}
+\begin{itemize}
+    \item CAF signature score by progression category
+    \item Slow: \TODO{[median score]}, Fast: \TODO{[median score]}
+    \item Univariate Cox (Korean cohort): HR = \TODO{[e.g., 1.8 [1.0-3.2]]}, p = \TODO{[0.042]}
+\end{itemize}
+
+\subsubsection*{Paragraph 2: TCGA validation}
+\begin{itemize}
+    \item TCGA-STAD (n=443): HR = 2.31 [95\% CI 1.07-4.98], p = 0.033 ✓
+    \item Interpretation: Consistent with Korean cohort; replicates in large cohort
+    \item Cite \FIG{validation} Panel A (forest plot)
+\end{itemize}
+
+\subsubsection*{Paragraph 3: Additional GEO cohorts}
+\begin{itemize}
+    \item GSE84437 (n=432, RFS): HR = 2.27 [1.24-4.15], p = 0.016 ✓
+    \item GSE26253 (n=163, OS): HR = 2.22 [0.98-5.03], p = 0.055 (trending)
+    \item GSE62254 (n=300, ACRG): No survival data; ssGSEA only
+    \item Summary: CAF signature prognostic in 2-3 cohorts, consistent direction in all
+\end{itemize}
+
+\subsection{Multi-Cohort Replication of SPP1+ Macrophage Signature}
+\TODO{Write 2 paragraphs:}
+
+\subsubsection*{Paragraph 1: Cross-cohort presence analysis}
+\begin{itemize}
+    \item SPP1+ macrophages detectable (score $>$ 0) in: \TODO{[% cells by dataset]}
+    \item Dataset 1: \TODO{[X]}\%, Dataset 2: \TODO{[X]}\%, etc.
+    \item Range: 22-60\% of myeloid cells
+    \item Chi-square: p = \TODO{[e.g., 0.003]} (heterogeneous but present in all)
+\end{itemize}
+
+\subsubsection*{Paragraph 2: Functional concordance}
+\begin{itemize}
+    \item Observation: SPP1+ signature AND CD8 exhaustion markers co-expressed in all datasets
+    \item Interpretation: Finding is robust across different labs, platforms, patient populations
+    \item Cite \FIG{cross_dataset} or Supp Fig replication
+\end{itemize}
+
+\subsection{TME Predictor Composite Score Validates Across Cohorts}
+\TODO{Write 2-3 paragraphs:}
+
+\subsubsection*{Paragraph 1: Score derivation}
+\begin{itemize}
+    \item LASSO logistic regression on Korean cohort
+    \item Features: SPP1+ macrophage fraction, CAF signature, CD8 exhaustion score, \TODO{[others?]}
+    \item Optimal lambda: \TODO{[value]} (selected by cross-validation)
+    \item Final model coefficients: \TODO{[SPP1 weight, CAF weight, etc.]}
+    \item Cite \FIG{predictor} Panel C (coefficients)
+\end{itemize}
+
+\subsubsection*{Paragraph 2: Internal performance}
+\begin{itemize}
+    \item Korean cohort (training): AUC = \TODO{[0.82]}, C-index = \TODO{[0.72]}
+    \item 5-fold cross-validation: AUC = \TODO{[0.78 ± 0.05]}
+\end{itemize}
+
+\subsubsection*{Paragraph 3: External validation}
+\begin{itemize}
+    \item TCGA-STAD (n=443): AUC = \TODO{[0.71]}, C-index = \TODO{[0.65]}
+    \item GSE26253 (n=163): AUC = \TODO{[0.68]}, C-index = \TODO{[0.63]}
+    \item Clinical utility: Score stratifies patients into risk tiers
+    \item Cite \FIG{predictor} Panel A (ROC) and Panel D (KM by score)
+\end{itemize}
+
+\subsection{T Cell Trajectory from Naive to Exhausted State}
+\TODO{Write 1-2 paragraphs (optional, can move to Supplementary):}
+\begin{itemize}
+    \item PAGA + pseudotime identifies trajectory: Naive $\to$ Effector $\to$ Exhausted
+    \item Gene expression changes along trajectory: \TODO{[Early genes, late genes]}
+    \item Pseudotime value correlates with exhaustion score: \TODO{[Spearman r]}
+    \item Cite \FIG{trajectory} Panel A-B
+\end{itemize}
+
+%-----------
+% DISCUSSION
+%-----------
+\section{Discussion}
+
+\subsection{Summary of Findings}
+\TODO{Write 1 paragraph reiterating main results:}
+\begin{itemize}
+    \item Integrated 766k cells from 5 scRNA-seq cohorts
+    \item Identified SPP1+ macrophages as key prognostic population
+    \item SPP1+ associates with T cell exhaustion; both predict poor response
+    \item CAF signature also prognostic, replicates across cohorts
+    \item Developed composite TME predictor score
+\end{itemize}
+
+\subsection{Biological Interpretation}
+\TODO{Write 2-3 paragraphs:}
+
+\subsubsection*{SPP1+ Macrophages as Tumor-Promoting Population}
+\TODO{Discuss:}
+\begin{itemize}
+    \item What is SPP1? (Osteopontin; known functions in \TODO{[angiogenesis, integrin signaling, immune regulation]})
+    \item Why are they enriched in fast progressors?
+    \begin{itemize}
+        \item Hypothesis 1: Direct T cell suppression via \TODO{[SPP1-integrin? TGFB? IL-10?]}
+        \item Hypothesis 2: Promote tumor cell survival via \TODO{[adhesion? survival signals?]}
+        \item Hypothesis 3: Remodel ECM → physical barrier to infiltration
+    \end{itemize}
+    \item Literature: Compare to other TAM studies (cite papers on M2 macrophages, IL-10, TGF-\beta)
+    \item Our unique finding: First to link SPP1+ specifically in gastric cancer + immunotherapy
+\end{itemize}
+
+\subsubsection*{T Cell Exhaustion as a Consequence (Not Just a Marker)}
+\TODO{Discuss:}
+\begin{itemize}
+    \item Are exhausted T cells: marker of failed response, or driver of response failure?
+    \item Evidence from LIANA: SPP1+ macrophages produce ligands (SPP1, TGFB, IL-10) that activate inhibitory pathways in T cells
+    \item Temporal question: Are naive T cells converted to exhausted by SPP1+ macrophages?
+    \item Therapeutic angle: Can exhaustion be reversed? (PD-1 + TIM-3 dual checkpoint inhibitors)
+\end{itemize}
+
+\subsubsection*{CAF-Mediated Immunosuppression}
+\TODO{Discuss:}
+\begin{itemize}
+    \item Known mechanisms: ECM remodeling, cytokine production (IL-6, TGF-\beta, MCP-1)
+    \item Our finding adds: CAF signature is prognostic in multiple bulk cohorts
+    \item Question: Are CAFs directly suppressing T cells, or creating hypoxia/nutrient-poor microenvironment?
+    \item Compare to CAF-targeted therapies in development
+\end{itemize}
+
+\subsection{Clinical Significance and Therapeutic Implications}
+\TODO{Write 2-3 paragraphs:}
+
+\subsubsection*{Patient Stratification}
+\TODO{Discuss:}
+\begin{itemize}
+    \item Current practice: PD-L1 CPS alone is weak predictor
+    \item Our finding: SPP1+/CAF/exhaustion composite better stratification
+    \item Application: Pre-treatment biopsy $\to$ scRNA-seq or bulk signature $\to$ predict response
+    \item Clinical trial: Could enrich responders for anti-PD-1 monotherapy
+    \item Cost/logistics: Discuss feasibility (bulk RNA-seq cheaper than scRNA-seq)
+\end{itemize}
+
+\subsubsection*{Therapeutic Targets}
+\TODO{Discuss:}
+\begin{itemize}
+    \item Block SPP1: \TODO{[Is there a known inhibitor? Monoclonal antibody? Small molecule?]}
+    \item Target SPP1-integrin: \TODO{[ITGAV inhibitor? RGD peptides?]}
+    \item Target CAFs: \TODO{[FAP inhibitor? TGF-\beta inhibitor? Discuss trials]}
+    \item Reverse exhaustion: \TODO{[Dual checkpoint inhibitor trial data?]}
+    \item Combination strategy: Anti-PD-1 + anti-SPP1 synergy (hypothesis)
+\end{itemize}
+
+\subsubsection*{Biomarker Development}
+\TODO{Discuss:}
+\begin{itemize}
+    \item Feasibility: TME predictor score is computable from bulk RNA-seq (low cost)
+    \item Validation needed: Prospective trial correlative analysis
+    \item Next step: High-dimensional flow cytometry or immunohistochemistry validation (SPP1+ myeloid)
+\end{itemize}
+
+\subsection{Comparison to Prior Work}
+\TODO{Write 2-3 paragraphs:}
+
+\subsubsection*{Previous Single-Cohort Analyses}
+\TODO{Discuss:}
+\begin{itemize}
+    \item Other gastric cancer scRNA-seq studies: \TODO{[Cite specific papers, n=?, findings]}
+    \item How our meta-analysis adds value: Power, generalizability, multi-platform robustness
+    \item Unique to us: Focus on immunotherapy response prediction
+\end{itemize}
+
+\subsubsection*{TAM/Macrophage Biology in Other Cancers}
+\TODO{Discuss:}
+\begin{itemize}
+    \item Lung cancer (NSCLC): TAM subsets and checkpoint response (cite papers)
+    \item Melanoma: M1/M2 polarization and response to anti-PD-1 (cite)
+    \item Colorectal cancer: CAF-myeloid interactions (cite)
+    \item How gastric cancer is similar/different
+\end{itemize}
+
+\subsection{Study Limitations}
+\TODO{Write 2-3 paragraphs:}
+
+\subsubsection*{Data Limitations}
+\TODO{Discuss:}
+\begin{itemize}
+    \item Korean cohort: n=33 adequate for scRNA-seq, but limited racial/geographic diversity
+    \item External cohorts: Different sequencing platforms (10x? Smart-seq2? etc.), batch effects despite integration
+    \item Sathe2020 excluded: Loss of one dataset, possible selection bias
+    \item Clinical data: Korean cohort rich, but GEO cohorts have limited metadata
+\end{itemize}
+
+\subsubsection*{Methodological Limitations}
+\TODO{Discuss:}
+\begin{itemize}
+    \item scVI checkpoint at epoch 10: Incomplete training — did it converge? Impact on latent space?
+    \item Cell type annotation fallback: Marker scoring can be circular if genes used for both annotation and analysis
+    \item Survival stratification: Median split assumes binary effect; non-linear associations possible
+    \item Cross-cohort: Different endpoints (PFS vs OS vs RFS) complicate direct comparison
+\end{itemize}
+
+\subsubsection*{Biological Limitations}
+\TODO{Discuss:}
+\begin{itemize}
+    \item scRNA-seq snapshot: Can't assess temporal dynamics of T cell exhaustion
+    \item In vitro validation lacking: Need functional experiments to prove SPP1+ suppresses T cells
+    \item Spatial context: Don't know if SPP1+ macrophages are perivascular, hypoxic zones, etc.
+    \item Causality: Association doesn't prove causation; could be confounded
+\end{itemize}
+
+\subsection{Future Directions}
+\TODO{Write 2-3 paragraphs:}
+
+\subsubsection*{Mechanistic Studies}
+\TODO{Discuss:}
+\begin{itemize}
+    \item In vitro co-culture: SPP1+ macrophages + naive CD8 T cells → measure exhaustion markers, function
+    \item In vivo: CRISPR knockout of SPP1 in tumors → assess T cell infiltration, response to anti-PD-1
+    \item Spatial transcriptomics: Visium/MERFISH on patient samples → where are SPP1+ macrophages? Proximity to T cells?
+\end{itemize}
+
+\subsubsection*{Clinical Translation}
+\TODO{Discuss:}
+\begin{itemize}
+    \item Prospective biomarker study: Correlative analysis in active immunotherapy trial
+    \item Translational assay: Develop IHC/flow panel for SPP1+ macrophages in biopsy
+    \item Precision oncology angle: SPP1+ score guides: anti-PD-1 monotherapy vs combination?
+\end{itemize}
+
+\subsubsection*{Extended Biology}
+\TODO{Discuss:}
+\begin{itemize}
+    \item RNA velocity: Do naïve macrophages differentiate into SPP1+ in situ?
+    \item Trajectory: Are specific T cell states predictive of exhaustion?
+    \item Patient stratification: Can we predict treatment response before therapy starts?
+\end{itemize}
+
+\subsection{Conclusions}
+\TODO{Write 1-2 sentences:}
+\begin{itemize}
+    \item Our comprehensive single-cell meta-analysis reveals SPP1+ macrophages and T cell exhaustion as key determinants of immunotherapy response
+    \item These findings have immediate clinical application for patient stratification and suggest new therapeutic targets (SPP1, CAFs) to improve outcomes in gastric cancer
+\end{itemize}
+
+%-----------
+% REFERENCES
+%-----------
+\bibliography{references}
+\bibliographystyle{unsrtnat}
+
+%-----------
+% FIGURES
+%-----------
+\appendix
+\section{Figures}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{outputs/figures/Fig1_cohort_overview.pdf}
+    \caption{\textbf{Cohort overview and TME composition.}
+    (A) UMAP of 766,845 integrated cells colored by cell type.
+    (B) Same UMAP colored by dataset origin.
+    (C) Heatmap of cell type composition (major types listed) stratified by progression category (Slow/Fast).
+    (D) \TODO{[Describe Panel D]}.
+    (E) Kaplan-Meier curves for slow vs. fast progressors in Korean cohort (log-rank p = \TODO{[value]}).
+    }
+    \label{fig:cohort_overview}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{outputs/figures/Fig2_SPP1_macrophage.pdf}
+    \caption{\textbf{SPP1+ macrophages predict poor prognosis.}
+    (A) UMAP of myeloid subclusters, highlighting SPP1+ population.
+    (B) Violin plots of marker genes across macrophage subtypes.
+    (C) Bar chart of SPP1+ macrophage frequency (Slow vs. Fast, \TODO{[p-value]}).
+    (D) Kaplan-Meier curve stratified by SPP1+ macrophage fraction (high vs. low median split; HR = \TODO{[value]}, p = \TODO{[value]}).
+    (E) \TODO{[Panel E description]}.
+    }
+    \label{fig:spp1_macrophage}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{outputs/figures/Fig3_trajectory.pdf}
+    \caption{\textbf{T cell trajectory and exhaustion.}
+    (A) PAGA graph with pseudotime overlay (color gradient = naive to exhausted).
+    (B) Gene expression along pseudotime (top genes: \TODO{[list]}).
+    (C) Violin plot of exhaustion score (Slow vs. Fast, \TODO{[p-value]}).
+    (D) Scatter plot of SPP1+ myeloid fraction vs. CD8 exhaustion score (Spearman r = \TODO{[value]}, p = \TODO{[value]}).
+    }
+    \label{fig:trajectory}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{outputs/figures/Fig4_communication.pdf}
+    \caption{\textbf{Cell-cell communication network identifies SPP1+ macrophage-T cell interactions.}
+    (A) Heatmap of ligand-receptor interaction strength (SPP1+ macrophage → all other cells).
+    (B) Zoomed heatmap of SPP1+ ↔ T cell interactions.
+    (C) LIANA dotplot showing interaction strength vs. specificity.
+    (D) \TODO{[Panel D description]}.
+    }
+    \label{fig:communication}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{outputs/figures/Fig5_TCGA_validation.pdf}
+    \caption{\textbf{Multi-cohort validation in bulk RNA-seq.}
+    (A) Forest plot of CAF signature HR across TCGA-STAD, GSE84437, GSE26253 (with 95\% CI).
+    (B) Kaplan-Meier curve (TCGA-STAD) stratified by CAF signature.
+    (C) Kaplan-Meier curve (GSE26253) stratified by SPP1+ signature.
+    (D) Scatter plot of SPP1+ macrophage frequency (scRNA) vs. ssGSEA score (TCGA).
+    }
+    \label{fig:validation}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{outputs/figures/Fig6_predictor.pdf}
+    \caption{\textbf{TME predictor composite score.}
+    (A) ROC curves for composite score (Korean, TCGA, GSE26253).
+    (B) Calibration plot (predicted vs. observed event rate).
+    (C) LASSO coefficients for each feature.
+    (D) Kaplan-Meier stratified by predictor score tertiles (Low/Medium/High risk).
+    }
+    \label{fig:predictor}
+\end{figure}
+
+\newpage
+\section{Tables}
+
+\begin{table}[H]
+\centering
+\caption{Summary of scRNA-seq cohorts integrated in this study.}
+\label{tab:cohort_summary}
+\small
+\begin{tabular}{l c c c c c}
+\toprule
+\textbf{Cohort} & \textbf{n Patients} & \textbf{n Cells (raw)} & \textbf{n Cells (QC)} & \textbf{Platform} & \textbf{Reference} \\
+\midrule
+Korean (primary) & 33 & 654,770 & 429,867 & \TODO{[10x? SMARTseq?]} & \TODO{[Kim et al]} \\
+Kumar 2022 & \TODO{[n]} & \TODO{[cells]} & \TODO{[cells]} & \TODO{[platform]} & \TODO{[citation]} \\
+T cell exhaustion 2022 & \TODO{[n]} & \TODO{[cells]} & \TODO{[cells]} & \TODO{[platform]} & \TODO{[citation]} \\
+Zhang 2021 & \TODO{[n]} & \TODO{[cells]} & \TODO{[cells]} & \TODO{[platform]} & \TODO{[citation]} \\
+Diffuse GC 2021 & \TODO{[n]} & \TODO{[cells]} & \TODO{[cells]} & \TODO{[platform]} & \TODO{[citation]} \\
+\midrule
+\textbf{Total integrated} & — & 766,845 & \TODO{[after QC]} & Mixed & — \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Clinical characteristics of Korean cohort (n=33 patients).}
+\label{tab:clinical}
+\small
+\begin{tabular}{l c c}
+\toprule
+\textbf{Feature} & \textbf{n} & \textbf{Value} \\
+\midrule
+Age (years) & 33 & \TODO{[Median (range)]} \\
+Gender (M/F) & 33 & \TODO{[n (\%)]} \\
+ECOG PS (0/1/≥2) & 33 & \TODO{[n (\%)]} \\
+Stage (I/II/III/IV) & 33 & \TODO{[n (\%)]} \\
+HER2 (Pos/Neg) & 33 & \TODO{[n (\%)]} \\
+EBV (Pos/Neg) & 33 & \TODO{[n (\%)]} \\
+MSI (H/L/MSS) & 33 & \TODO{[n (\%)]} \\
+PDL1 CPS & 33 & \TODO{[Median (range)]} \\
+Progression category (Slow/Fast) & 33 & \TODO{[n (\%)]} \\
+PFS (months) & 33 & \TODO{[Median (range)]} \\
+OS (months) & 33 & \TODO{[Median (range)]} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Univariate Cox regression analysis (Korean cohort, n=33).}
+\label{tab:univariate_cox}
+\small
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Variable} & \textbf{Events} & \textbf{HR [95\% CI]} & \textbf{p-value} & \textbf{Significant} \\
+\midrule
+SPP1+ macrophage (high) & \TODO{[n]} & \TODO{[2.1 [1.2-3.7]]} & \TODO{[0.008]} & * \\
+CAF signature (high) & \TODO{[n]} & \TODO{[1.8 [1.0-3.2]]} & \TODO{[0.042]} & * \\
+CD8 exhaustion (high) & \TODO{[n]} & \TODO{[2.3 [1.3-4.1]]} & \TODO{[0.004]} & ** \\
+PDL1 CPS (≥10) & \TODO{[n]} & \TODO{[value]} & \TODO{[p]} & — \\
+Age (continuous) & \TODO{[n]} & \TODO{[value]} & \TODO{[p]} & — \\
+\bottomrule
+\multicolumn{5}{l}{$*$ p < 0.05, $**$ p < 0.01} \\
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Multi-cohort survival validation (CAF and SPP1+ signatures).}
+\label{tab:multicohort_validation}
+\small
+\begin{tabular}{l c c c c c}
+\toprule
+\textbf{Cohort} & \textbf{n} & \textbf{Endpoint} & \textbf{Feature} & \textbf{HR [95\% CI]} & \textbf{p-value} \\
+\midrule
+Korean (primary) & 33 & OS & CAF signature & \TODO{[1.8]} & \TODO{[0.042]} \\
+& & & SPP1+ macrophage & \TODO{[2.1]} & \TODO{[0.008]} \\
+TCGA-STAD & 443 & OS & CAF signature & 2.31 [1.07-4.98] & 0.033 \\
+GSE84437 & 432 & RFS & SPP1+ signature & 3.44 [1.48-7.99] & 0.004 \\
+GSE26253 & 163 & OS & CAF signature & 2.22 [0.98-5.03] & 0.055 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}

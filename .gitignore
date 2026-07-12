@@ -1,0 +1,41 @@
+# Large data files (use Git LFS if needed)
+*.h5ad
+*.h5
+*.pkl
+*.pickle
+
+# Temporary files
+*.tmp
+*.log
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Output directories (keep code, exclude large outputs)
+outputs/*.png
+outputs/*.pdf
+outputs/*.csv
+outputs/**/*.png
+outputs/**/*.pdf
+
+# Keep notebooks and code, exclude model checkpoints
+scvi_model_ckpt_*
+*.pt
+*.pth
+
+# Keep data directory structure but exclude large files
+data/**/*.h5ad
+data/**/*.h5
