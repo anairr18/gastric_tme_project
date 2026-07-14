@@ -1,11 +1,20 @@
-# Data files (too large)
+# Data files (tracked with git-lfs)
 *.h5ad
 *.h5
-*.csv
-data/
-outputs/
 *.pkl
 *.pickle
+
+# Large CSVs (too large)
+data/**/*.csv
+
+# Raw data directory
+data/raw/
+
+# Temp outputs
+*.tmp
+*.log
+ml_output.txt
+script_output.txt
 
 # Python
 __pycache__/
@@ -14,6 +23,8 @@ __pycache__/
 .Python
 env/
 venv/
+.pytest_cache/
+*.egg-info/
 
 # IDEs
 .vscode/
@@ -24,9 +35,3 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
-
-# Temp
-*.tmp
-*.log
-ml_output.txt
-script_output.txt
