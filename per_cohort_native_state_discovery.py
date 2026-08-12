@@ -89,6 +89,10 @@ def load_native_cohort(
             data.X = data.layers[layer].copy()
         data.obs["dataset_id"] = dataset_id
         data.obs["frozen_broad_label"] = source_labels[selected]
+        # Raw IDs may be duplicated, notably in the Korean count source. The
+        # source row index makes cluster assignments auditable and reusable.
+        data.obs["source_row_index"] = selected.astype(np.int64)
+        data.obs["source_cell_id"] = source.obs_names[selected].astype(str)
         sample_column = col(data.obs, SAMPLE_COLUMNS)
         data.obs["analysis_sample"] = data.obs[sample_column].astype(str) if sample_column else "MISSING_SAMPLE"
         return data, {
@@ -103,7 +107,14 @@ def load_native_cohort(
         source.file.close()
 
 
-def native_cluster(data, resolution: float, n_hvgs: int):
+def native_cluster(
+    data,
+    resolution: float,
+    n_hvgs: int,
+    *,
+    compute_umap: bool = True,
+    compute_markers: bool = True,
+):
     import scanpy as sc
 
     sc.pp.normalize_total(data, target_sum=1e4)
@@ -116,14 +127,16 @@ def native_cluster(data, resolution: float, n_hvgs: int):
     sc.tl.pca(data, n_comps=min(50, data.n_vars - 1), random_state=17)
     sc.pp.neighbors(data, n_neighbors=15, n_pcs=min(40, data.obsm["X_pca"].shape[1]), random_state=17)
     sc.tl.leiden(data, resolution=resolution, key_added="native_cluster", random_state=17)
-    sc.tl.umap(data, random_state=17)
-    sc.tl.rank_genes_groups(
-        data, groupby="native_cluster", method="wilcoxon", n_genes=25, use_raw=True
-    )
+    if compute_umap:
+        sc.tl.umap(data, random_state=17)
+    if compute_markers:
+        sc.tl.rank_genes_groups(
+            data, groupby="native_cluster", method="wilcoxon", n_genes=25, use_raw=True
+        )
     return data
 
 
-def export_compartment(data, dataset_id: str, broad_label: str, output_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def export_compartment(data, dataset_id: str, broad_label: str, output_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     import matplotlib.pyplot as plt
     import scanpy as sc
 
@@ -167,7 +180,11 @@ def export_compartment(data, dataset_id: str, broad_label: str, output_dir: Path
     figure.savefig(output_dir / f"{stem}_native_umap.png", dpi=300, bbox_inches="tight")
     figure.savefig(output_dir / f"{stem}_native_umap.pdf", bbox_inches="tight")
     plt.close(figure)
-    return marker_table, summary, pd.DataFrame(templates)
+    assignments = data.obs.loc[:, [
+        "dataset_id", "frozen_broad_label", "analysis_sample", "source_row_index", "source_cell_id", "native_cluster",
+    ]].copy()
+    assignments = assignments.rename(columns={"frozen_broad_label": "broad_label"})
+    return marker_table, summary, pd.DataFrame(templates), assignments
 
 
 def main() -> None:
@@ -188,7 +205,7 @@ def main() -> None:
     if missing:
         raise ValueError(f"Manifest is missing core cohorts: {missing}")
     reference_labels = frozen_broad_label_lookup(args.reference_atlas)
-    input_rows, marker_tables, cluster_summaries, templates, status_rows = [], [], [], [], []
+    input_rows, marker_tables, cluster_summaries, templates, assignment_tables, status_rows = [], [], [], [], [], []
 
     for ordinal, dataset_id in enumerate(CORE_IDS):
         print(f"Loading native cohort: {dataset_id}", flush=True)
@@ -207,10 +224,11 @@ def main() -> None:
                 continue
             print(f"  {broad_label}: {subset.n_obs} cells", flush=True)
             clustered = native_cluster(subset, args.resolution, args.n_hvgs)
-            markers, summary, template = export_compartment(clustered, dataset_id, broad_label, args.output_dir)
+            markers, summary, template, assignments = export_compartment(clustered, dataset_id, broad_label, args.output_dir)
             marker_tables.append(markers)
             cluster_summaries.append(summary)
             templates.append(template)
+            assignment_tables.append(assignments)
             status_rows.append({
                 "dataset_id": dataset_id,
                 "broad_label": broad_label,
@@ -226,12 +244,19 @@ def main() -> None:
             args.output_dir, dataset_id, input_rows, marker_tables, cluster_summaries,
             templates, status_rows,
         )
+        if assignment_tables:
+            pd.concat(assignment_tables, ignore_index=True).to_csv(
+                args.output_dir / "NATIVE_PER_COHORT_CELL_ASSIGNMENTS_PARTIAL.csv.gz", index=False, compression="gzip"
+            )
 
     pd.DataFrame(input_rows).to_csv(args.output_dir / "NATIVE_PER_COHORT_INPUT_AUDIT.csv", index=False)
     pd.DataFrame(status_rows).to_csv(args.output_dir / "NATIVE_PER_COHORT_CLUSTER_STATUS.csv", index=False)
     pd.concat(marker_tables, ignore_index=True).to_csv(args.output_dir / "NATIVE_PER_COHORT_CLUSTER_MARKERS.csv", index=False)
     pd.concat(cluster_summaries, ignore_index=True).to_csv(args.output_dir / "NATIVE_PER_COHORT_CLUSTER_SUMMARY.csv", index=False)
     pd.concat(templates, ignore_index=True).to_csv(args.output_dir / "NATIVE_PER_COHORT_ANNOTATION_TEMPLATE.csv", index=False)
+    pd.concat(assignment_tables, ignore_index=True).to_csv(
+        args.output_dir / "NATIVE_PER_COHORT_CELL_ASSIGNMENTS.csv.gz", index=False, compression="gzip"
+    )
     (args.output_dir / "README_AND_REVIEW_GATE.md").write_text(
         "# Native Per-Cohort State Discovery\n\n"
         "Each cohort and broad compartment was clustered independently from its own audited count matrix. The frozen atlas was used only to identify a broad-compartment correspondence and the retained Korean cell universe. Native clusters are not cross-cohort states. Review `NATIVE_PER_COHORT_ANNOTATION_TEMPLATE.csv` with marker evidence before harmonising labels or testing abundance.\n\n"
@@ -244,6 +269,7 @@ def main() -> None:
         "min_cells_per_compartment": args.min_cells_per_compartment,
         "leiden_resolution": args.resolution,
         "n_hvgs": args.n_hvgs,
+        "cell_assignment_table": "NATIVE_PER_COHORT_CELL_ASSIGNMENTS.csv.gz",
         "reference_atlas_used_only_for_broad_correspondence": str(args.reference_atlas),
     }, indent=2) + "\n", encoding="utf-8")
     print(f"Native per-cohort state discovery written to {args.output_dir}")
