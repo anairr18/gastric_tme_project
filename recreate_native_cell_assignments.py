@@ -36,6 +36,10 @@ def main() -> None:
     parser.add_argument("--reference-atlas", type=Path, required=True)
     parser.add_argument("--discovery-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--cohorts", nargs="+", choices=CORE_IDS,
+        help="Optional subset for interruption-safe cohort checkpoints. A final all-cohort run performs the exact-match audit.",
+    )
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     original_path = args.discovery_dir / "NATIVE_PER_COHORT_CLUSTER_SUMMARY.csv"
@@ -49,7 +53,8 @@ def main() -> None:
     reference = frozen_broad_label_lookup(args.reference_atlas)
     assignment_tables, summary_tables = [], []
 
-    for ordinal, dataset_id in enumerate(CORE_IDS):
+    selected_ids = args.cohorts or CORE_IDS
+    for ordinal, dataset_id in enumerate(selected_ids):
         print(f"Recreating assignments: {dataset_id}", flush=True)
         data, _ = load_native_cohort(
             dataset_id, manifest.loc[dataset_id], args.data_root, reference, 30000, 17 + ordinal,
@@ -81,8 +86,12 @@ def main() -> None:
                 args.output_dir / "NATIVE_PER_COHORT_CELL_ASSIGNMENTS_PARTIAL.csv.gz", index=False, compression="gzip"
             )
 
+    if not assignment_tables:
+        raise RuntimeError("No cohort assignments were created.")
+
     recreated = canonical_summary(pd.concat(summary_tables, ignore_index=True))
-    comparison = original.merge(
+    expected = original.loc[original["dataset_id"].isin(selected_ids)].copy()
+    comparison = expected.merge(
         recreated, on=["dataset_id", "broad_label", "native_cluster"], how="outer", suffixes=("_original", "_recreated"), indicator=True,
     )
     comparison["exact_match"] = (
@@ -98,11 +107,16 @@ def main() -> None:
             "Do not apply the reviewed workbook; investigate software/input drift."
         )
     assignments = pd.concat(assignment_tables, ignore_index=True)
-    assignments.to_csv(args.output_dir / "NATIVE_PER_COHORT_CELL_ASSIGNMENTS.csv.gz", index=False, compression="gzip")
+    assignment_name = (
+        "NATIVE_PER_COHORT_CELL_ASSIGNMENTS.csv.gz"
+        if args.cohorts is None else f"NATIVE_PER_COHORT_CELL_ASSIGNMENTS_{selected_ids[0]}.csv.gz"
+    )
+    assignments.to_csv(args.output_dir / assignment_name, index=False, compression="gzip")
     (args.output_dir / "RUN_MANIFEST.json").write_text(json.dumps({
         "original_discovery_dir": str(args.discovery_dir),
         "n_assignment_rows": int(len(assignments)),
         "cluster_recreation_exact_match": True,
+        "cohorts": list(selected_ids),
         "method": "same deterministic clustering; UMAP and marker ranking skipped",
     }, indent=2) + "\n", encoding="utf-8")
     print(f"Recreated assignments written to {args.output_dir}")
