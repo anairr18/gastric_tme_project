@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 
 
-GEO_TAR = "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE251nnn/GSE251950/suppl/GSE251950_RAW.tar"
+GEO_TAR = "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE251950&format=file&file=GSE251950_RAW.tar"
 GSM_PATTERN = re.compile(r"GSM7990\d+")
 
 
