@@ -118,19 +118,28 @@ def main() -> None:
     run(sys.executable, str(code_root / "computational_provisional_native_curation.py"), "--audit", str(audit_dir / "NATIVE_CLUSTER_LINEAGE_AUDIT.csv"), "--markers", str(discovery / "NATIVE_PER_COHORT_CLUSTER_MARKERS.csv"), "--output-dir", str(provisional_dir))
     run(sys.executable, str(code_root / "resolve_all_native_cluster_dispositions.py"), "--dictionary", str(provisional_dir / "COMPUTATIONAL_PROVISIONAL_STATE_DICTIONARY.csv"), "--output-dir", str(resolution_dir))
 
-    for cohort in CORE_IDS:
-        checkpoint = assignments_dir / f"NATIVE_PER_COHORT_CELL_ASSIGNMENTS_{cohort}.csv.gz"
-        if checkpoint.exists():
-            print(f"Checkpoint exists; skipping recreation: {cohort}", flush=True)
-            continue
+    frozen_assignments = discovery / "NATIVE_PER_COHORT_CELL_ASSIGNMENTS.csv.gz"
+    if frozen_assignments.exists():
+        print(f"Using frozen per-cell assignments from completed discovery: {frozen_assignments}", flush=True)
         run(
-            sys.executable, str(code_root / "recreate_native_cell_assignments.py"),
-            "--manifest", str(runtime_manifest), "--data-root", str(data_root),
-            "--reference-atlas", str(reference_atlas), "--discovery-dir", str(discovery),
-            "--output-dir", str(assignments_dir), "--cohorts", cohort,
+            sys.executable, str(code_root / "validate_frozen_native_assignments.py"),
+            "--assignments", str(frozen_assignments), "--discovery-dir", str(discovery),
+            "--output-dir", str(combined_dir),
         )
-
-    run(sys.executable, str(code_root / "combine_recreated_native_assignments.py"), "--assignment-dir", str(assignments_dir), "--discovery-dir", str(discovery), "--output-dir", str(combined_dir))
+    else:
+        print("Frozen per-cell assignments are absent; attempting exact deterministic reconstruction.", flush=True)
+        for cohort in CORE_IDS:
+            checkpoint = assignments_dir / f"NATIVE_PER_COHORT_CELL_ASSIGNMENTS_{cohort}.csv.gz"
+            if checkpoint.exists():
+                print(f"Checkpoint exists; skipping recreation: {cohort}", flush=True)
+                continue
+            run(
+                sys.executable, str(code_root / "recreate_native_cell_assignments.py"),
+                "--manifest", str(runtime_manifest), "--data-root", str(data_root),
+                "--reference-atlas", str(reference_atlas), "--discovery-dir", str(discovery),
+                "--output-dir", str(assignments_dir), "--cohorts", cohort,
+            )
+        run(sys.executable, str(code_root / "combine_recreated_native_assignments.py"), "--assignment-dir", str(assignments_dir), "--discovery-dir", str(discovery), "--output-dir", str(combined_dir))
     run(sys.executable, str(code_root / "build_primary_working_state_composition.py"), "--assignments", str(combined_dir / "NATIVE_PER_COHORT_CELL_ASSIGNMENTS_ALL_COHORTS.csv.gz"), "--resolution-ledger", str(resolution_dir / "ALL_505_NATIVE_CLUSTER_RESOLUTION_LEDGER.csv"), "--output-dir", str(composition_dir))
     run(sys.executable, str(code_root / "state_abundance_meta_analysis.py"), "--curated-composition", str(composition_dir / "PRIMARY_WORKING_STATE_SAMPLE_COMPOSITION.csv"), "--output-dir", str(meta_dir))
     print(f"Completed primary working-state inference: {run_root}")
