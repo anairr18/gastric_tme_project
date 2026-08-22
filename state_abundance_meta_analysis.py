@@ -110,9 +110,9 @@ def cohort_effect(frame: pd.DataFrame, cohort: str, state: str) -> dict | None:
             "design": "unpaired", "effect": effect, "standard_error": se}
 
 
-def random_effects(effects: pd.DataFrame) -> dict | None:
+def random_effects(effects: pd.DataFrame, *, min_cohorts: int = 3) -> dict | None:
     values = effects.loc[(effects["standard_error"] > 0) & np.isfinite(effects["standard_error"])].copy()
-    if len(values) < 3:
+    if len(values) < min_cohorts:
         return None
     variances = values["standard_error"].to_numpy() ** 2
     observed = values["effect"].to_numpy()
@@ -136,12 +136,15 @@ def random_effects(effects: pd.DataFrame) -> dict | None:
 
 
 def loco_direction(effects: pd.DataFrame) -> bool:
-    full = random_effects(effects)
+    full = random_effects(effects, min_cohorts=3)
     if full is None or full["pooled_effect"] == 0:
         return False
     directions = []
     for cohort in effects["cohort"].unique():
-        result = random_effects(effects.loc[effects["cohort"] != cohort])
+        # A three-cohort result leaves two cohorts at each LOCO iteration.
+        # Two-study random-effects estimates are valid as a directional
+        # sensitivity check, though never sufficient for the primary meta-analysis.
+        result = random_effects(effects.loc[effects["cohort"] != cohort], min_cohorts=2)
         if result is not None:
             directions.append(np.sign(result["pooled_effect"]) == np.sign(full["pooled_effect"]))
     return bool(directions and all(directions))
