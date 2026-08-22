@@ -41,13 +41,37 @@ def find_discovery(project_root: Path) -> Path:
     return max(candidates, key=lambda path: path.stat().st_mtime)
 
 
+def find_reference_atlas(project_root: Path, data_root: Path) -> Path:
+    """Locate the annotated six-cohort atlas across supported Drive layouts."""
+    preferred = [
+        project_root / "colab_rawcounts_sixcohort" / "gastric_meta_annotated_rawcounts_sixcohort.h5ad",
+        project_root / "colab_rawcounts_sixcohort" / "gastric_meta_annotated.h5ad",
+        data_root / "processed" / "integrated" / "gastric_meta_annotated.h5ad",
+    ]
+    for path in preferred:
+        if path.exists():
+            return path
+    candidates = [
+        path for root in [project_root, data_root]
+        if root.exists()
+        for path in root.rglob("*annotated*.h5ad")
+        if "gastric_meta" in path.name.lower() and "korea" not in path.name.lower()
+    ]
+    if not candidates:
+        raise FileNotFoundError(
+            "No annotated multi-cohort atlas was found. Expected, for example, "
+            "gastric_tme_project/colab_rawcounts_sixcohort/gastric_meta_annotated_rawcounts_sixcohort.h5ad."
+        )
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
 def main() -> None:
     code_root = Path(__file__).resolve().parents[1]
     project_root = Path(os.environ.get("GASTRIC_TME_PROJECT_ROOT", "/content/drive/MyDrive/gastric_tme_project"))
     data_root = Path(os.environ.get("GASTRIC_TME_DATA_ROOT", "/content/drive/MyDrive/data"))
     discovery = Path(os.environ["GASTRIC_TME_NATIVE_DISCOVERY"]) if os.environ.get("GASTRIC_TME_NATIVE_DISCOVERY") else find_discovery(project_root)
     manifest = data_root / "external" / "dataset_manifest.csv"
-    reference_atlas = data_root / "processed" / "integrated" / "gastric_meta_annotated.h5ad"
+    reference_atlas = find_reference_atlas(project_root, data_root)
     required = [manifest, reference_atlas, discovery / "NATIVE_PER_COHORT_CLUSTER_SUMMARY.csv", discovery / "NATIVE_PER_COHORT_CLUSTER_MARKERS.csv"]
     missing = [str(path) for path in required if not path.exists()]
     if missing:
@@ -67,6 +91,7 @@ def main() -> None:
     print(f"Code: {code_root}")
     print(f"Project: {project_root}")
     print(f"Data: {data_root}")
+    print(f"Reference atlas: {reference_atlas}")
     print(f"Discovery: {discovery}")
     print(f"Output: {run_root}")
 
