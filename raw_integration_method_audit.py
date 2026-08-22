@@ -75,6 +75,13 @@ def matrix_sums(matrix, n_rows: int):
 
 def candidate_paths(data_root: Path, dataset_id: str, manifest_row: pd.Series) -> list[Path]:
     paths: list[Path] = []
+    if dataset_id == "korea_kim2022":
+        # Native Korean analyses require the sample-qualified reconstruction
+        # created during the identity-repair audit. The generic processed H5AD
+        # is metadata-oriented and can contain an empty X matrix.
+        paths.append(
+            data_root / "processed" / "per_dataset" / "korea_kim2022_raw_counts_sample_qualified.h5ad"
+        )
     supplied = manifest_row.get("local_h5ad")
     if isinstance(supplied, str) and supplied.strip():
         candidate = Path(supplied)
@@ -84,8 +91,9 @@ def candidate_paths(data_root: Path, dataset_id: str, manifest_row: pd.Series) -
         data_root / "processed" / "per_dataset" / f"{dataset_id}_metadata_only.h5ad",
     ]
     if dataset_id == "korea_kim2022":
-        # A manifest-specified repaired source takes precedence. The original
-        # raw file remains a fallback only when no repaired source is supplied.
+        # The original raw object remains a last-resort fallback. It is not
+        # interchangeable with the sample-qualified reconstruction for native
+        # state analyses because its duplicate IDs need the repair audit.
         paths.append(data_root / "raw" / "ge_korea_raw_data_count_matricies_raw_combined.h5ad")
     unique: list[Path] = []
     for path in paths:

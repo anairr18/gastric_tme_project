@@ -15,6 +15,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pandas as pd
 
 CORE_IDS = [
     "korea_kim2022", "kumar2022", "sathe2020", "zhang2021",
@@ -80,6 +81,23 @@ def main() -> None:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_root = Path(os.environ.get("GASTRIC_TME_PRIMARY_STATE_RUN", str(project_root / "PRIMARY_WORKING_STATE_INFERENCE" / stamp)))
     run_root.mkdir(parents=True, exist_ok=True)
+    runtime_manifest = run_root / "dataset_manifest_runtime.csv"
+    manifest_frame = pd.read_csv(manifest)
+    korean_repaired = (
+        data_root / "processed" / "per_dataset" / "korea_kim2022_raw_counts_sample_qualified.h5ad"
+    )
+    if not korean_repaired.exists():
+        raise FileNotFoundError(
+            "The Korean sample-qualified raw-count object is missing: "
+            f"{korean_repaired}. Native state reconstruction cannot use the generic processed Korean H5AD."
+        )
+    manifest_frame["local_h5ad"] = manifest_frame.get(
+        "local_h5ad", pd.Series(index=manifest_frame.index, dtype="object")
+    ).astype("object")
+    manifest_frame.loc[
+        manifest_frame["dataset_id"].astype(str).eq("korea_kim2022"), "local_h5ad"
+    ] = str(korean_repaired)
+    manifest_frame.to_csv(runtime_manifest, index=False)
     audit_dir = run_root / "01_LINEAGE_AUDIT"
     provisional_dir = run_root / "02_PROVISIONAL_CURATION"
     resolution_dir = run_root / "03_ALL_CLUSTER_RESOLUTION"
@@ -91,6 +109,7 @@ def main() -> None:
     print(f"Code: {code_root}")
     print(f"Project: {project_root}")
     print(f"Data: {data_root}")
+    print(f"Korean native count source: {korean_repaired}")
     print(f"Reference atlas: {reference_atlas}")
     print(f"Discovery: {discovery}")
     print(f"Output: {run_root}")
@@ -106,7 +125,7 @@ def main() -> None:
             continue
         run(
             sys.executable, str(code_root / "recreate_native_cell_assignments.py"),
-            "--manifest", str(manifest), "--data-root", str(data_root),
+            "--manifest", str(runtime_manifest), "--data-root", str(data_root),
             "--reference-atlas", str(reference_atlas), "--discovery-dir", str(discovery),
             "--output-dir", str(assignments_dir), "--cohorts", cohort,
         )
