@@ -117,6 +117,14 @@ def native_cluster(
 ):
     import scanpy as sc
 
+    raw_totals = np.asarray(data.X.sum(axis=1)).ravel()
+    expressed_genes = int(np.count_nonzero(np.asarray(data.X.sum(axis=0)).ravel() > 0))
+    if np.any(raw_totals <= 0) or expressed_genes < 2:
+        raise ValueError(
+            "Native clustering requires nonzero raw counts for every cell and at least two expressed genes; "
+            f"found zero_count_cells={int(np.count_nonzero(raw_totals <= 0))}, "
+            f"expressed_genes={expressed_genes}."
+        )
     sc.pp.normalize_total(data, target_sum=1e4)
     sc.pp.log1p(data)
     sc.pp.highly_variable_genes(data, n_top_genes=min(n_hvgs, data.n_vars), flavor="seurat")

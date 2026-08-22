@@ -16,6 +16,7 @@ import gc
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from integration_method_sensitivity_benchmark import frozen_broad_label_lookup
@@ -62,10 +63,39 @@ def main() -> None:
             # would silently change the sampled cells and invalidate curation.
             dataset_id, manifest.loc[dataset_id], args.data_root, reference, 30000, 17 + CORE_IDS.index(dataset_id),
         )
-        for broad in sorted(data.obs["frozen_broad_label"].astype(str).unique()):
+        # Recreate exactly the partitions that appeared in the completed native
+        # discovery. Raw sources can contain reference-matched cells that were
+        # deliberately excluded from native clustering (for example, sparse or
+        # non-biological partitions); including them would make this rerun a
+        # different analysis and invalidates the reviewed cluster ledger.
+        expected_broads = sorted(
+            original.loc[original["dataset_id"].eq(dataset_id), "broad_label"]
+            .astype(str)
+            .unique()
+        )
+        observed_broads = set(data.obs["frozen_broad_label"].astype(str))
+        missing_broads = sorted(set(expected_broads) - observed_broads)
+        if missing_broads:
+            raise ValueError(
+                f"{dataset_id}: raw source no longer contains discovery partition(s): {missing_broads}. "
+                "Do not continue with a non-identical reconstruction."
+            )
+        print(f"  Recreating original partitions only: {', '.join(expected_broads)}", flush=True)
+        for broad in expected_broads:
             subset = data[data.obs["frozen_broad_label"].astype(str).eq(broad)].copy()
-            if subset.n_obs < 100:
-                continue
+            raw_totals = np.asarray(subset.X.sum(axis=1)).ravel()
+            n_zero_count = int(np.count_nonzero(raw_totals <= 0))
+            n_expressed_genes = int(np.count_nonzero(np.asarray(subset.X.sum(axis=0)).ravel() > 0))
+            print(
+                f"  {broad}: {subset.n_obs} cells, {subset.obs['analysis_sample'].nunique()} samples, "
+                f"zero-count cells={n_zero_count}, expressed genes={n_expressed_genes}",
+                flush=True,
+            )
+            if subset.n_obs < 100 or n_zero_count or n_expressed_genes < 2:
+                raise ValueError(
+                    f"{dataset_id}/{broad}: cannot exactly recreate the original partition "
+                    f"(cells={subset.n_obs}, zero-count cells={n_zero_count}, expressed genes={n_expressed_genes})."
+                )
             clustered = native_cluster(
                 subset, resolution=0.6, n_hvgs=3000, compute_umap=False, compute_markers=False,
             )
