@@ -31,6 +31,20 @@ def log_cp10k(matrix):
     return matrix
 
 
+def collapse_duplicate_gene_symbols(matrix, genes: pd.Index):
+    """Sum duplicate count columns before normalisation and marker profiling."""
+    genes = pd.Index(genes.astype(str).str.upper())
+    if not genes.duplicated().any():
+        return matrix, genes, 0
+    codes, unique = pd.factorize(genes, sort=True)
+    source = matrix.tocsr() if sparse.issparse(matrix) else sparse.csr_matrix(matrix)
+    projector = sparse.csr_matrix(
+        (np.ones(len(codes), dtype=np.float32), (np.arange(len(codes)), codes)),
+        shape=(len(codes), len(unique)),
+    )
+    return source @ projector, pd.Index(unique.astype(str)), int(genes.duplicated().sum())
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assignments", required=True, type=Path)
@@ -74,15 +88,12 @@ def main() -> None:
         try:
             rows = cohort_rows.sort_values("source_row_index").reset_index(drop=True)
             selected = rows["source_row_index"].to_numpy(dtype=int)
-            if selected.min(initial=0) < 0 or selected.max(initial=-1) >= source.n_obs:
+            if selected.min() < 0 or selected.max() >= source.n_obs:
                 raise ValueError(f"{dataset_id}: source-row assignment lies outside the source H5AD.")
             subset = source[selected, :].to_memory()
             counts, layer = count_matrix(subset)
+            counts, genes, duplicated = collapse_duplicate_gene_symbols(counts, subset.var_names)
             expression = log_cp10k(counts)
-            genes = pd.Index(subset.var_names.astype(str).str.upper())
-            if genes.duplicated().any():
-                duplicated = int(genes.duplicated().sum())
-                raise ValueError(f"{dataset_id}: {duplicated} duplicate gene symbols in profiling input.")
             for state_id, state_rows in rows.groupby("state_id", observed=True):
                 indices = state_rows.index.to_numpy(dtype=int)
                 mean_expression = np.asarray(expression[indices].mean(axis=0)).ravel()
@@ -100,6 +111,7 @@ def main() -> None:
                 "n_profiled_cells": int(len(rows)),
                 "n_states": int(rows["state_id"].nunique()),
                 "n_genes": int(len(genes)),
+                "n_collapsed_duplicate_gene_symbols": duplicated,
             })
         finally:
             source.file.close()
