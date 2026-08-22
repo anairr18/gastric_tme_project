@@ -124,15 +124,24 @@ def random_effects(effects: pd.DataFrame, *, min_cohorts: int = 3) -> dict | Non
     tau2 = max(0.0, (q - df) / c) if c > 0 else 0.0
     weights = 1 / (variances + tau2)
     pooled = float(np.sum(weights * observed) / np.sum(weights))
-    se = float(math.sqrt(1 / np.sum(weights)))
-    z = pooled / se if se else np.nan
-    p_value = float(2 * stats.norm.sf(abs(z))) if np.isfinite(z) else np.nan
-    ci_low, ci_high = pooled - 1.96 * se, pooled + 1.96 * se
+    se_normal = float(math.sqrt(1 / np.sum(weights)))
+    # Hartung-Knapp gives more defensible uncertainty with the very small
+    # number of cohorts available here. The modified scale prevents an
+    # implausibly narrow interval when residual heterogeneity is near zero.
+    hk_scale = max(1.0, float(np.sum(weights * (observed - pooled) ** 2) / df))
+    se = float(math.sqrt(hk_scale) * se_normal)
+    t_stat = pooled / se if se else np.nan
+    p_value = float(2 * stats.t.sf(abs(t_stat), df=df)) if np.isfinite(t_stat) else np.nan
+    t_critical = float(stats.t.ppf(0.975, df=df))
+    ci_low, ci_high = pooled - t_critical * se, pooled + t_critical * se
     i2 = max(0.0, (q - df) / q) * 100 if q > 0 else 0.0
     pi_sd = math.sqrt(tau2 + se ** 2)
-    return {"n_cohorts": len(values), "pooled_effect": pooled, "standard_error": se, "ci_low": ci_low, "ci_high": ci_high,
-            "p_value": p_value, "tau2": tau2, "i2_percent": i2, "prediction_low": pooled - 1.96 * pi_sd,
-            "prediction_high": pooled + 1.96 * pi_sd, "directional_concordance": float(max((observed > 0).mean(), (observed < 0).mean()))}
+    pi_critical = float(stats.t.ppf(0.975, df=max(1, len(values) - 2)))
+    return {"n_cohorts": len(values), "pooled_effect": pooled, "standard_error": se,
+            "standard_error_normal": se_normal, "hk_scale": hk_scale, "ci_low": ci_low, "ci_high": ci_high,
+            "p_value": p_value, "tau2": tau2, "i2_percent": i2, "prediction_low": pooled - pi_critical * pi_sd,
+            "prediction_high": pooled + pi_critical * pi_sd,
+            "directional_concordance": float(max((observed > 0).mean(), (observed < 0).mean()))}
 
 
 def loco_direction(effects: pd.DataFrame) -> bool:
@@ -226,7 +235,7 @@ def main() -> None:
             meta_rows.append({"state_id": state, **result, "loco_stable_direction": loco_direction(group),
                               "cohorts": ";".join(sorted(group["cohort"].unique()))})
     meta = pd.DataFrame(meta_rows, columns=[
-        "state_id", "n_cohorts", "pooled_effect", "standard_error", "ci_low", "ci_high", "p_value",
+        "state_id", "n_cohorts", "pooled_effect", "standard_error", "standard_error_normal", "hk_scale", "ci_low", "ci_high", "p_value",
         "tau2", "i2_percent", "prediction_low", "prediction_high", "directional_concordance",
         "loco_stable_direction", "cohorts",
     ])
@@ -250,7 +259,7 @@ def main() -> None:
             "portable_strict", "exploratory_or_heterogeneous"
         )
     meta = meta.reindex(columns=[
-        "state_id", "n_cohorts", "pooled_effect", "standard_error", "ci_low", "ci_high", "p_value",
+        "state_id", "n_cohorts", "pooled_effect", "standard_error", "standard_error_normal", "hk_scale", "ci_low", "ci_high", "p_value",
         "tau2", "i2_percent", "prediction_low", "prediction_high", "directional_concordance",
         "loco_stable_direction", "cohorts", "state_marker_gate", "fdr", "publication_class",
     ])
