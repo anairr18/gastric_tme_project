@@ -176,6 +176,14 @@ def main() -> None:
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     composition = pd.read_csv(args.curated_composition)
+    if "zero_filled_absent_state" not in composition.columns:
+        raise ValueError(
+            "Curated composition is not zero-complete. Re-run "
+            "build_primary_working_state_composition.py before meta-analysis; "
+            "otherwise samples with an absent state are dropped from the contrast."
+        )
+    if composition["zero_filled_absent_state"].isna().any():
+        raise ValueError("zero_filled_absent_state contains missing values; stop before inference.")
     # The stage-test workflow writes the reviewed label as ``reviewed_state``;
     # the standalone finalizer uses ``reviewed_state_label``. Accept either
     # explicit, semantically identical column without guessing a state label.
