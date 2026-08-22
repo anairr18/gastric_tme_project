@@ -54,10 +54,13 @@ def main() -> None:
     assignment_tables, summary_tables = [], []
 
     selected_ids = args.cohorts or CORE_IDS
-    for ordinal, dataset_id in enumerate(selected_ids):
+    for dataset_id in selected_ids:
         print(f"Recreating assignments: {dataset_id}", flush=True)
         data, _ = load_native_cohort(
-            dataset_id, manifest.loc[dataset_id], args.data_root, reference, 30000, 17 + ordinal,
+            # Keep the original full-six-cohort seed even when this runner is
+            # resumed one cohort at a time.  Enumerating the requested subset
+            # would silently change the sampled cells and invalidate curation.
+            dataset_id, manifest.loc[dataset_id], args.data_root, reference, 30000, 17 + CORE_IDS.index(dataset_id),
         )
         for broad in sorted(data.obs["frozen_broad_label"].astype(str).unique()):
             subset = data[data.obs["frozen_broad_label"].astype(str).eq(broad)].copy()
