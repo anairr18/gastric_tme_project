@@ -88,6 +88,14 @@ def main() -> None:
         sys.executable, str(code_root / "raw_integration_method_audit.py"),
         "--manifest", str(runtime_manifest), "--data-root", str(data_root), "--output-dir", str(raw_audit),
     )
+    preflight = pd.read_csv(raw_audit / "RAW_INPUT_PREFLIGHT.csv")
+    blocked = preflight.loc[~preflight["status"].eq("eligible")]
+    if not blocked.empty:
+        blocked.to_csv(run_root / "BLOCKED_COUNT_SOURCE_COHORTS.csv", index=False)
+        raise RuntimeError(
+            "Count-source audit blocked one or more cohorts. Resolve BLOCKED_COUNT_SOURCE_COHORTS.csv "
+            "before native discovery; no state labels or biological tests were generated."
+        )
     run(
         sys.executable, str(code_root / "per_cohort_native_state_discovery.py"),
         "--manifest", str(runtime_manifest), "--data-root", str(data_root),
