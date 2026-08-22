@@ -264,6 +264,15 @@ def main() -> None:
         "loco_stable_direction", "cohorts", "state_marker_gate", "fdr", "publication_class",
     ])
     meta.to_csv(args.output_dir / "TUMOR_NORMAL_STATE_RANDOM_EFFECTS_META.csv", index=False)
+    (args.output_dir / "README_AND_CLAIM_BOUNDARIES.md").write_text(
+        "# State-Abundance Meta-Analysis\n\n"
+        "Effects are tumour-minus-normal differences in the within-compartment state fraction, "
+        "using samples or paired donors as the unit of inference. Composition tables are zero-complete "
+        "for states represented in a cohort. Random-effects confidence intervals and p-values use modified "
+        "Hartung-Knapp inference; leave-one-cohort-out estimates are directional sensitivity checks only. "
+        "A state is not portable_strict unless it also passes the separate state-marker gate.\n",
+        encoding="utf-8",
+    )
     trends = zhang_trends(composition)
     trends.to_csv(args.output_dir / "ZHANG_PREMALIGNANT_STATE_TRENDS.csv", index=False)
 
@@ -274,7 +283,7 @@ def main() -> None:
         ax.axvline(0, color="black", linewidth=0.8)
         ax.set_yticks(range(len(plot)), plot["state_id"])
         ax.set_xlabel("Tumour - normal state fraction (random-effects pooled difference)")
-        ax.set_title("Curated state-abundance meta-analysis")
+        ax.set_title("Curated state-abundance meta-analysis (Hartung-Knapp)")
         fig.tight_layout()
         fig.savefig(args.output_dir / "STATE_ABUNDANCE_META_FOREST.png", dpi=300, bbox_inches="tight")
         fig.savefig(args.output_dir / "STATE_ABUNDANCE_META_FOREST.pdf", bbox_inches="tight")
