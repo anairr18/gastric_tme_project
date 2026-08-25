@@ -97,7 +97,7 @@ def main() -> None:
         raise ValueError(f"Composition is missing required columns: {sorted(missing)}")
     korea = composition.loc[composition.dataset_id.astype(str).eq("korea_kim2022")].copy()
     korea["state_id"] = korea.compartment.astype(str) + "::" + korea.reviewed_state_label.astype(str)
-    patient_time = korea.sample.map(patient_and_timepoint)
+    patient_time = korea["sample"].map(patient_and_timepoint)
     korea[["patient_id", "timepoint"]] = pd.DataFrame(patient_time.tolist(), index=korea.index)
     korea = korea.dropna(subset=["patient_id", "timepoint"])
     clinical = clinical_table(args.clinical)
