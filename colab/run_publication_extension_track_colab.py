@@ -90,6 +90,7 @@ def main() -> None:
     parser.add_argument("--run", type=Path)
     parser.add_argument("--download-gse308624", action="store_true")
     parser.add_argument("--download-gse189926", action="store_true")
+    parser.add_argument("--write-gse189926-h5ad", action="store_true")
     parser.add_argument("--download-tcga", action="store_true")
     parser.add_argument("--spatial-permutations", type=int, default=499)
     parser.add_argument("--treatment-permutations", type=int, default=10000)
@@ -180,11 +181,14 @@ def main() -> None:
     gse189_expression = gse189 / "GSE189926_immune_pseudobulk_counts.csv"
     gse189_clinical = gse189 / "GSE189926_clinical_audited.csv"
     if args.download_gse189926:
-        run(
+        command = [
             sys.executable,
             str(base / "download_gse189926_ici_pseudobulk.py"),
             "--output-dir", str(gse189), "--download-matrices",
-        )
+        ]
+        if args.write_gse189926_h5ad:
+            command.append("--write-h5ad")
+        run(*command)
     if gse189_expression.exists() and gse189_clinical.exists():
         run(
             sys.executable,

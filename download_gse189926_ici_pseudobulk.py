@@ -19,6 +19,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import anndata as ad
+from scipy import sparse
 
 
 ACCESSION = "GSE189926"
@@ -91,6 +93,29 @@ def sum_matrix(path: Path) -> pd.Series:
     return result.groupby(level=0).sum()
 
 
+def read_matrix_as_anndata(path: Path, sample: pd.Series) -> tuple[pd.Series, ad.AnnData]:
+    """Read one GEO dense gene-by-cell matrix and retain raw integer counts."""
+    table = pd.read_csv(path, sep="\t", compression="gzip", index_col=0, low_memory=False)
+    table.index = table.index.astype(str).str.upper()
+    table = table.apply(pd.to_numeric, errors="coerce").fillna(0)
+    if table.index.has_duplicates:
+        table = table.groupby(level=0, sort=False).sum()
+    counts = table.sum(axis=1)
+    barcodes = table.columns.astype(str)
+    matrix = sparse.csr_matrix(table.to_numpy(dtype=np.int32, copy=False).T)
+    obs = pd.DataFrame({
+        "cell_barcode": barcodes,
+        "sample_id": str(sample["sample_id"]),
+        "patient_id": str(sample["patient_id"]),
+        "timepoint": str(sample["timepoint"]),
+        "response": str(sample["response"]),
+        "tissue": "tumor",
+        "assay_scope": str(sample["assay_scope"]),
+        "dataset_id": ACCESSION,
+    }, index=pd.Index(str(sample["sample_id"]) + "::" + barcodes, name="cell_id"))
+    return counts, ad.AnnData(X=matrix, obs=obs, var=pd.DataFrame(index=table.index))
+
+
 def matrix_path(root: Path, sample: pd.Series) -> Path:
     filename = Path(str(sample["matrix_url"])).name
     return root / "matrices" / filename
@@ -104,6 +129,7 @@ def main() -> None:
         default=Path("/content/drive/MyDrive/data/external/validation_extensions/GSE189926"),
     )
     parser.add_argument("--download-matrices", action="store_true")
+    parser.add_argument("--write-h5ad", action="store_true")
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     soft_path = args.output_dir / "GSE189926_family.soft.gz"
@@ -127,13 +153,33 @@ def main() -> None:
         print(f"Prepared auditable clinical table; {len(missing)} matrices remain to download.")
         return
 
-    sums = {}
+    sums, adatas = {}, []
     for ordinal, (_, sample) in enumerate(clinical.iterrows(), start=1):
         print(f"[{ordinal}/{len(clinical)}] pseudobulk {sample['sample_id']} ({sample['title']})", flush=True)
-        sums[str(sample["sample_id"])] = sum_matrix(matrix_path(args.output_dir, sample))
+        if args.write_h5ad:
+            counts, one = read_matrix_as_anndata(matrix_path(args.output_dir, sample), sample)
+            sums[str(sample["sample_id"])] = counts
+            adatas.append(one)
+        else:
+            sums[str(sample["sample_id"])] = sum_matrix(matrix_path(args.output_dir, sample))
     expression = pd.DataFrame(sums).fillna(0.0)
     expression.index.name = "gene"
     expression.reset_index().to_csv(args.output_dir / "GSE189926_immune_pseudobulk_counts.csv", index=False)
+    h5ad_path = args.output_dir / "GSE189926_CD45_immune_raw_counts.h5ad"
+    if args.write_h5ad:
+        atlas = ad.concat(adatas, join="outer", merge="same", index_unique=None)
+        if not atlas.obs_names.is_unique:
+            raise ValueError("GSE189926 sample-qualified cell IDs are not unique.")
+        atlas.X = atlas.X.tocsr().astype(np.int32)
+        atlas.uns["provenance"] = {
+            "geo_accession": ACCESSION,
+            "source_page": SOURCE_PAGE,
+            "raw_count_matrix_source": RAW_TAR_URL,
+            "assay_scope": "CD45-selected immune single-cell suspensions",
+            "validation_only": True,
+        }
+        print(f"[write] {h5ad_path} ({atlas.n_obs} cells, {atlas.n_vars} genes)", flush=True)
+        atlas.write_h5ad(h5ad_path, compression="gzip")
     manifest = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "dataset_id": ACCESSION,
@@ -141,6 +187,7 @@ def main() -> None:
         "raw_matrix_source": RAW_TAR_URL,
         "n_samples": int(len(clinical)),
         "n_patients": int(clinical["patient_id"].nunique()),
+        "raw_count_h5ad": str(h5ad_path) if args.write_h5ad else None,
         "assay_scope": "CD45-selected immune single-cell suspensions",
         "claim_boundary": (
             "Sample-level immune pseudobulk from public raw matrices. It can assess "
