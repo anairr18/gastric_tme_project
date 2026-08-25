@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Run the evidence-building extension track without altering the frozen atlas.
 
-Public tumor-only spatial cohorts are used solely for spatial ecology.  Paired
-spatial and ICI claims run only when the user supplies auditable inputs in the
-documented Drive locations.
+Public tumour-only spatial cohorts are used solely for spatial ecology. GSE189926
+is a public, CD45-selected pre/post chemoimmunotherapy cohort and is used only
+for frozen immune-state context. Paired-spatial claims still require a truly
+paired, auditable external spatial input.
 """
 
 from __future__ import annotations
@@ -88,6 +89,8 @@ def main() -> None:
     parser.add_argument("--data-root", type=Path, default=Path("/content/drive/MyDrive/data"))
     parser.add_argument("--run", type=Path)
     parser.add_argument("--download-gse308624", action="store_true")
+    parser.add_argument("--download-gse189926", action="store_true")
+    parser.add_argument("--download-tcga", action="store_true")
     parser.add_argument("--spatial-permutations", type=int, default=499)
     parser.add_argument("--treatment-permutations", type=int, default=10000)
     args = parser.parse_args()
@@ -115,6 +118,43 @@ def main() -> None:
     stages["korean_longitudinal_and_pathology"] = "completed"
 
     extension_root = args.data_root / "external" / "validation_extensions"
+
+    # This public single-cell cohort provides useful independent disease-site
+    # context, but it has too few paired tumour-normal donors for confirmation.
+    gse163558_root = args.data_root / "external" / "validation"
+    gse163558_preflight = output / "00_GSE163558_PREFLIGHT"
+    gse163558_programs = output / "00_GSE163558_FROZEN_PROGRAM_CONTEXT"
+    try:
+        run(sys.executable, str(base / "download_gse163558_validation.py"), "--data-root", str(args.data_root))
+        run(
+            sys.executable,
+            str(base / "external_validation_preflight.py"),
+            "--registry", str(base / "data" / "external" / "external_validation_registry.csv"),
+            "--data-root", str(gse163558_root),
+            "--output-dir", str(gse163558_preflight),
+        )
+        run(
+            sys.executable,
+            str(base / "frozen_external_program_validation.py"),
+            "--preflight", str(gse163558_preflight / "EXTERNAL_VALIDATION_PREFLIGHT.csv"),
+            "--output-dir", str(gse163558_programs),
+        )
+        run(
+            sys.executable,
+            str(base / "gse163558_context_summary.py"),
+            "--scores", str(gse163558_programs / "EXTERNAL_FROZEN_PROGRAM_SAMPLE_SCORES.csv"),
+            "--output-dir", str(gse163558_programs),
+        )
+        stages["gse163558_primary_adjacent_metastatic_context"] = (
+            "completed; validation-only descriptive sample-pseudobulk context, not inferential tumour-normal replication"
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as error:
+        gse163558_programs.mkdir(parents=True, exist_ok=True)
+        (gse163558_programs / "GSE163558_CONTEXT_STATUS.txt").write_text(
+            f"excluded_or_failed: {type(error).__name__}: {error}\n", encoding="utf-8"
+        )
+        stages["gse163558_primary_adjacent_metastatic_context"] = f"excluded_or_failed: {error}"
+
     gse308 = extension_root / "GSE308624"
     if args.download_gse308624:
         for name, url in GSE308624.items():
@@ -136,6 +176,32 @@ def main() -> None:
     else:
         stages["gse308624_tumour_spatial_ecology"] = "not_run; download absent or incomplete"
 
+    gse189 = extension_root / "GSE189926"
+    gse189_expression = gse189 / "GSE189926_immune_pseudobulk_counts.csv"
+    gse189_clinical = gse189 / "GSE189926_clinical_audited.csv"
+    if args.download_gse189926:
+        run(
+            sys.executable,
+            str(base / "download_gse189926_ici_pseudobulk.py"),
+            "--output-dir", str(gse189), "--download-matrices",
+        )
+    if gse189_expression.exists() and gse189_clinical.exists():
+        run(
+            sys.executable,
+            str(base / "gse189926_ici_immune_context.py"),
+            "--expression", str(gse189_expression),
+            "--clinical", str(gse189_clinical),
+            "--reference-profiles", str(profiles),
+            "--output-dir", str(output / "03_GSE189926_ICI_IMMUNE_CONTEXT"),
+        )
+        stages["gse189926_ici_immune_context"] = (
+            "completed; public CD45-selected, frozen immune-state treatment context only"
+        )
+    else:
+        stages["gse189926_ici_immune_context"] = (
+            "not_run; pass --download-gse189926 to obtain public matrices and build auditable immune pseudobulk"
+        )
+
     optional = {
         "paired_spatial_tumour_normal": inspect_optional_h5ad(extension_root / "PAIRED_GC_SPATIAL" / "paired_tumor_normal_spatial.h5ad", "requires >=3 paired tumour-normal patients and coordinates"),
         "external_ici_scrna": inspect_optional_h5ad(extension_root / "PRJEB60680_GSE315929" / "PRJEB60680_GSE315929.h5ad", "requires patient, sample, timepoint, response, and counts"),
@@ -151,6 +217,12 @@ def main() -> None:
 
     tcga_expression = extension_root / "TCGA_STAD_SUBTYPES" / "TCGA_STAD_expression.csv"
     tcga_clinical = extension_root / "TCGA_STAD_SUBTYPES" / "TCGA_STAD_clinical.csv"
+    if args.download_tcga:
+        run(
+            sys.executable,
+            str(base / "download_tcga_stad_2014.py"),
+            "--output-dir", str(tcga_expression.parent),
+        )
     optional["tcga_molecular_subtypes"] = {"status": "present" if tcga_expression.exists() and tcga_clinical.exists() else "missing", "expression": str(tcga_expression), "clinical": str(tcga_clinical)}
     if tcga_expression.exists() and tcga_clinical.exists():
         run(sys.executable, str(base / "frozen_bulk_clinical_validation.py"), "--expression", str(tcga_expression), "--clinical", str(tcga_clinical), "--reference-profiles", str(profiles), "--output-dir", str(output / "04_TCGA_MOLECULAR_SUBTYPES"), "--mode", "molecular_subtype")

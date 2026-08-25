@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Frozen, patient-level spatial validation in the GSE308624 CosMx cohort."""
+"""Frozen, section-level spatial ecology analysis in GSE308624 CosMx data."""
 
 from __future__ import annotations
 
@@ -176,7 +176,7 @@ def batched_spearman_permutation_pvalue(
     return rho, float((1 + extreme) / (n_permutations + 1))
 
 
-def patient_spatial_effects(
+def section_spatial_effects(
     obs: pd.DataFrame,
     seed: int = 481,
     relationships: dict | None = None,
@@ -186,16 +186,16 @@ def patient_spatial_effects(
     rng = np.random.default_rng(seed)
     rows = []
     relationships = relationships or RELATIONSHIPS
-    for sample, patient in obs.groupby("sample", sort=True):
-        coordinates = patient[["x", "y"]].to_numpy(float)
-        labels = patient["cell_type"].astype(str).to_numpy()
+    for section, section_data in obs.groupby("sample", sort=True):
+        coordinates = section_data[["x", "y"]].to_numpy(float)
+        labels = section_data["cell_type"].astype(str).to_numpy()
         for relationship, (source_score, source_type, target_score, target_type) in relationships.items():
             source_positions = np.flatnonzero(cell_type_mask(labels, source_type))
             target_positions = np.flatnonzero(cell_type_mask(labels, target_type))
             if len(source_positions) < MIN_SOURCE_CELLS or len(target_positions) < MIN_TARGET_CELLS:
                 continue
-            source_values = patient.iloc[source_positions][source_score].to_numpy(float)
-            target_values = patient.iloc[target_positions][target_score].to_numpy(float)
+            source_values = section_data.iloc[source_positions][source_score].to_numpy(float)
+            target_values = section_data.iloc[target_positions][target_score].to_numpy(float)
             if np.unique(source_values).size < 3 or np.unique(target_values).size < 3:
                 continue
             tree = cKDTree(coordinates[target_positions])
@@ -216,23 +216,23 @@ def patient_spatial_effects(
             rows.append(
                 {
                     "dataset_id": "GSE308624",
-                    "sample": int(sample),
+                    "section": int(section),
                     "relationship": relationship,
                     "n_source_cells": len(source_positions),
                     "n_target_cells": len(target_positions),
                     "spearman_rho": float(rho),
                     "analytic_p_value": float(p_value),
-                    "within_patient_permutation_p_value": permutation_p,
+                    "within_section_permutation_p_value": permutation_p,
                     "mean_neighbor_distance_mm": float(np.mean(distances)),
-                    "stage": patient["Stage"].iloc[0],
-                    "grade": patient["Grade"].iloc[0],
-                    "age": patient["Age"].iloc[0],
-                    "sex": patient["Sex"].iloc[0],
+                    "stage": section_data["Stage"].iloc[0],
+                    "grade": section_data["Grade"].iloc[0],
+                    "age": section_data["Age"].iloc[0],
+                    "sex": section_data["Sex"].iloc[0],
                 }
             )
     effects = pd.DataFrame(rows)
     effects["permutation_fdr_bh"] = multipletests(
-        effects["within_patient_permutation_p_value"], method="fdr_bh"
+        effects["within_section_permutation_p_value"], method="fdr_bh"
     )[1]
     return effects
 
@@ -266,7 +266,7 @@ def random_effects_fisher(effects: pd.DataFrame) -> dict:
     standard_error = math.sqrt(1.0 / np.sum(weights))
     positive_count = int((valid["spearman_rho"] > 0).sum())
     return {
-        "n_patients": len(valid),
+        "n_sections": len(valid),
         "n_source_cells": int(valid["n_source_cells"].sum()),
         "pooled_rho": float(np.tanh(pooled)),
         "ci_low": float(np.tanh(pooled - 1.96 * standard_error)),
@@ -275,13 +275,13 @@ def random_effects_fisher(effects: pd.DataFrame) -> dict:
         "tau2_fisher_z": tau2,
         "i2_percent": max(0.0, (q - df) / q) * 100 if q > 0 else 0.0,
         "q_p_value": float(stats.chi2.sf(q, df)) if df > 0 else np.nan,
-        "median_patient_rho": float(valid["spearman_rho"].median()),
-        "positive_patient_fraction": positive_count / len(valid),
-        "patient_wilcoxon_p_value": float(stats.wilcoxon(valid["spearman_rho"]).pvalue),
-        "patient_sign_test_p_value": float(
+        "median_section_rho": float(valid["spearman_rho"].median()),
+        "positive_section_fraction": positive_count / len(valid),
+        "section_wilcoxon_p_value": float(stats.wilcoxon(valid["spearman_rho"]).pvalue),
+        "section_sign_test_p_value": float(
             stats.binomtest(positive_count, len(valid), 0.5).pvalue
         ),
-        "patients_permutation_fdr_lt_0_05": int((valid["permutation_fdr_bh"] < 0.05).sum()),
+        "sections_permutation_fdr_lt_0_05": int((valid["permutation_fdr_bh"] < 0.05).sum()),
     }
 
 
@@ -291,11 +291,11 @@ def pool_effects(effects: pd.DataFrame) -> pd.DataFrame:
         rows.append({"relationship": relationship, **random_effects_fisher(group)})
     pooled = pd.DataFrame(rows)
     pooled["meta_fdr_bh"] = multipletests(pooled["p_value"], method="fdr_bh")[1]
-    pooled["patient_wilcoxon_fdr_bh"] = multipletests(
-        pooled["patient_wilcoxon_p_value"], method="fdr_bh"
+    pooled["section_wilcoxon_fdr_bh"] = multipletests(
+        pooled["section_wilcoxon_p_value"], method="fdr_bh"
     )[1]
-    pooled["patient_sign_test_fdr_bh"] = multipletests(
-        pooled["patient_sign_test_p_value"], method="fdr_bh"
+    pooled["section_sign_test_fdr_bh"] = multipletests(
+        pooled["section_sign_test_p_value"], method="fdr_bh"
     )[1]
     return pooled
 
@@ -309,8 +309,8 @@ def plot_results(effects: pd.DataFrame, pooled: pd.DataFrame, path: Path) -> Non
         axes[0].scatter(np.repeat(position, len(values)) + jitter, values, s=16, alpha=0.55)
     axes[0].axhline(0, color="#6B7280", linestyle="--", linewidth=1)
     axes[0].set_xticks(range(len(relationships)), relationships, rotation=35, ha="right")
-    axes[0].set_ylabel("Within-patient spatial Spearman rho")
-    axes[0].set_title("Patient-level spatial effects")
+    axes[0].set_ylabel("Within-section spatial Spearman rho")
+    axes[0].set_title("Section-level spatial effects")
 
     y = np.arange(len(pooled))
     effect = pooled["pooled_rho"].to_numpy()
@@ -338,7 +338,7 @@ def main() -> None:
     parser.add_argument("--clinical", type=Path, help="Clinical workbook; defaults to the repository data path")
     parser.add_argument("--output-dir", type=Path, help="Output directory; defaults to the repository output path")
     parser.add_argument("--include-hypoxia", action="store_true", help="run the preregistered hypoxia-to-CAF supporting association")
-    parser.add_argument("--n-permutations", type=int, default=N_PERMUTATIONS, help="within-patient permutation count; use 10000 for final figures")
+    parser.add_argument("--n-permutations", type=int, default=N_PERMUTATIONS, help="within-section block-permutation count; use 10000 for final figures")
     parser.add_argument("--permutation-batch-size", type=int, default=PERMUTATION_BATCH_SIZE, help="permutation rows evaluated at once")
     args = parser.parse_args()
     global INPUT, CLINICAL, OUT_DIR
@@ -353,7 +353,7 @@ def main() -> None:
     relationships = RELATIONSHIPS | (HYPOXIA_RELATIONSHIPS if args.include_hypoxia else {})
     if args.n_permutations < 250:
         raise ValueError("At least 250 permutations are required for a spatial result.")
-    effects = patient_spatial_effects(
+    effects = section_spatial_effects(
         obs,
         relationships=relationships,
         n_permutations=args.n_permutations,
@@ -361,10 +361,10 @@ def main() -> None:
     )
     pooled = pool_effects(effects)
     coverage.to_csv(OUT_DIR / "GSE308624_SIGNATURE_COVERAGE.csv", index=False)
-    effects.to_csv(OUT_DIR / "GSE308624_PATIENT_SPATIAL_EFFECTS.csv", index=False)
+    effects.to_csv(OUT_DIR / "GSE308624_SECTION_SPATIAL_EFFECTS.csv", index=False)
     pooled.to_csv(OUT_DIR / "SPATIAL_VALIDATION_RESULTS.csv", index=False)
     plot_results(effects, pooled, OUT_DIR / "Figure_GSE308624_Spatial_Validation.png")
-    supported = pooled[pooled["patient_wilcoxon_fdr_bh"] < 0.05]
+    supported = pooled[pooled["section_wilcoxon_fdr_bh"] < 0.05]
     text = f"""# GSE308624 Frozen Spatial Validation
 
 Frozen project signatures were scored in CosMx cells from independent gastric tumour sections.
@@ -373,7 +373,7 @@ the five nearest lineage-matched cells. Labels were permuted within each section
 correlations were combined with random effects.
 
 - Prespecified spatial relationships tested: {len(pooled)}.
-- Relationships with patient-level Wilcoxon FDR <0.05: {len(supported)}.
+- Relationships with section-level Wilcoxon FDR <0.05: {len(supported)}.
 - Signature coverage range: {coverage.coverage_fraction.min():.2f}-{coverage.coverage_fraction.max():.2f}.
 
 The assay has a targeted panel. Spatial association supports local ecology, not direct ligand-receptor
